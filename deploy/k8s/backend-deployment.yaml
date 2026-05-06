@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-backend
+  template:
+    metadata:
+      labels:
+        app: rag-backend
+    spec:
+      containers:
+        - name: backend
+          image: rag-backend:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: OLLAMA_BASE_URL
+              value: "http://ollama:11434"
+            - name: OLLAMA_MODEL
+              value: "llama3"
+            - name: LLM_BACKEND
+              value: "ollama"
+            - name: EMBEDDINGS_BACKEND
+              value: "hf"
+            - name: EMBEDDINGS_MODEL
+              value: "sentence-transformers/all-MiniLM-L6-v2"
+            - name: CORS_ORIGINS
+              value: "http://rag-frontend"
