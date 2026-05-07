@@ -365,3 +365,5 @@ async def rebuild_all_indexes(session: Session = Depends(get_session)) -> dict:
     settings = get_settings()
     await run_in_threadpool(rebuild_indexes, session, settings)
     return {"status": "rebuild_started"}
+
+# Day 4: streaming enhancements
