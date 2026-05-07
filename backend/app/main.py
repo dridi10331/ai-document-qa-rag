@@ -32,9 +32,15 @@ async def on_startup() -> None:
     settings.raw_dir.mkdir(parents=True, exist_ok=True)
     settings.processed_dir.mkdir(parents=True, exist_ok=True)
     init_db()
-    embedder = get_embedding_service(settings)
-    get_vector_store(settings, embedder.dimension)
-    get_bm25_store(settings)
+    # Only preload embeddings if not using mock backend
+    if settings.embeddings_backend != "mock":
+        embedder = get_embedding_service(settings)
+        get_vector_store(settings, embedder.dimension)
+        get_bm25_store(settings)
+    else:
+        # Initialize with mock dimension for fast startup
+        get_vector_store(settings, 384)
+        get_bm25_store(settings)
 
 
 @app.get("/")
