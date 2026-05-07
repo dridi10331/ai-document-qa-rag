@@ -110,3 +110,5 @@ async def ingest_upload(
             warnings.append("OCR disabled: some pages may be empty.")
 
     return document, warnings
+
+# Day 4: async processing improvements
