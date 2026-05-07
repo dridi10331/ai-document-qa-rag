@@ -105,5 +105,3 @@ def retrieve_chunks(
 
     expanded_query_text = " | ".join(expanded_queries) if expanded_queries else None
     return RetrievalResult(chunks=ranked_chunks, expanded_query=expanded_query_text)
-
-# Day 4: citation tracking
