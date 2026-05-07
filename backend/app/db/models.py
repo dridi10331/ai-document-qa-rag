@@ -8,7 +8,7 @@ from sqlmodel import Field, SQLModel
 
 
 class Document(SQLModel, table=True):
-    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    id: Optional[str] = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     filename: str
     content_type: Optional[str] = None
     size_bytes: int = 0
@@ -21,7 +21,7 @@ class Document(SQLModel, table=True):
 
 
 class Chunk(SQLModel, table=True):
-    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    id: Optional[str] = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     document_id: str = Field(foreign_key="document.id", index=True)
     chunk_index: int
     text: str
@@ -30,13 +30,13 @@ class Chunk(SQLModel, table=True):
 
 
 class ChatSession(SQLModel, table=True):
-    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    id: Optional[str] = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     title: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class ChatMessage(SQLModel, table=True):
-    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    id: Optional[str] = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     session_id: str = Field(foreign_key="chatsession.id", index=True)
     role: str
     content: str
@@ -44,7 +44,7 @@ class ChatMessage(SQLModel, table=True):
 
 
 class QueryLog(SQLModel, table=True):
-    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    id: Optional[str] = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     session_id: Optional[str] = Field(default=None, index=True)
     query: str
     expanded_query: Optional[str] = None
@@ -61,7 +61,7 @@ class QueryLog(SQLModel, table=True):
 
 
 class DocumentUsage(SQLModel, table=True):
-    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    id: Optional[str] = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     query_id: str = Field(foreign_key="querylog.id", index=True)
     document_id: str = Field(foreign_key="document.id", index=True)
     chunk_count: int = 0
