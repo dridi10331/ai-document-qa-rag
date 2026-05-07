@@ -14,3 +14,5 @@ def build_context(chunks: list[dict]) -> str:
             f"{chunk.get('text')}"
         )
     return "\n\n".join(parts)
+
+# Day 4: enhanced RAG prompts
