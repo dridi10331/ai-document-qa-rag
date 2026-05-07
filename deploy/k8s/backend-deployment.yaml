@@ -18,15 +18,18 @@ spec:
           ports:
             - containerPort: 8000
           env:
-            - name: OLLAMA_BASE_URL
-              value: "http://ollama:11434"
-            - name: OLLAMA_MODEL
-              value: "llama3"
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rag-secrets
+                  key: groq-api-key
+            - name: GROQ_MODEL
+              value: "llama-3.1-8b-instant"
             - name: LLM_BACKEND
-              value: "ollama"
+              value: "groq"
             - name: EMBEDDINGS_BACKEND
               value: "hf"
             - name: EMBEDDINGS_MODEL
               value: "sentence-transformers/all-MiniLM-L6-v2"
-            - name: CORS_ORIGINS
-              value: "http://rag-frontend"
+            - name: CORS_ORIGINS_STR
+              value: "https://your-frontend-domain.vercel.app"

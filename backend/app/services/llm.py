@@ -6,6 +6,7 @@ from typing import Iterator
 import json
 
 import requests
+from groq import Groq
 
 from app.core.config import Settings
 from app.services.prompts import SYSTEM_PROMPT, build_context
@@ -28,8 +29,14 @@ class AnswerResult:
     usage: AnswerUsage | None
 
 
+def get_groq_client(settings: Settings) -> Groq | None:
+    if not settings.groq_api_key:
+        return None
+    return Groq(api_key=settings.groq_api_key)
+
+
 def estimate_cost(settings: Settings, tokens_in: int | None, tokens_out: int | None) -> float | None:
-    # Ollama is free
+    # Groq is free tier
     return 0.0
 
 
@@ -61,8 +68,56 @@ def generate_answer(
             model=None,
             usage=None,
         )
-    
-    return _generate_answer_ollama(query, context_chunks, chat_history, settings)
+
+    if settings.llm_backend == "groq":
+        return _generate_answer_groq(query, context_chunks, chat_history, settings)
+    elif settings.llm_backend == "ollama":
+        return _generate_answer_ollama(query, context_chunks, chat_history, settings)
+    else:
+        return AnswerResult(
+            answer="LLM backend not configured. Set LLM_BACKEND=groq or LLM_BACKEND=ollama.",
+            model=None,
+            usage=None,
+        )
+
+
+def _generate_answer_groq(
+    query: str,
+    context_chunks: list[dict],
+    chat_history: list[dict],
+    settings: Settings,
+) -> AnswerResult:
+    client = get_groq_client(settings)
+    if client is None:
+        return AnswerResult(
+            answer="GROQ_API_KEY is missing. Get a free key at https://console.groq.com",
+            model=None,
+            usage=None,
+        )
+
+    messages = build_messages(query, context_chunks, chat_history, settings)
+    try:
+        response = client.chat.completions.create(
+            model=settings.groq_model,
+            messages=messages,
+            temperature=0.2,
+            max_tokens=512,
+        )
+        content = response.choices[0].message.content or ""
+        tokens_in = response.usage.prompt_tokens if response.usage else None
+        tokens_out = response.usage.completion_tokens if response.usage else None
+        return AnswerResult(
+            answer=content,
+            model=settings.groq_model,
+            usage=AnswerUsage(tokens_in=tokens_in, tokens_out=tokens_out, cost_estimate=0.0),
+        )
+    except Exception as e:
+        logger.error(f"Groq error: {e}")
+        return AnswerResult(
+            answer=f"Groq error: {str(e)}",
+            model=None,
+            usage=None,
+        )
 
 
 def _generate_answer_ollama(
@@ -73,17 +128,12 @@ def _generate_answer_ollama(
 ) -> AnswerResult:
     context_text = build_context(context_chunks)
     context_text = truncate_to_tokens(context_text, settings.max_context_tokens)
-    
-    # Build messages for Ollama
-    messages = []
-    messages.append({"role": "system", "content": SYSTEM_PROMPT})
-    
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     if chat_history:
         messages.extend(chat_history)
-    
     user_prompt = f"Context:\n{context_text}\n\nQuestion: {query}"
     messages.append({"role": "user", "content": user_prompt})
-    
+
     try:
         response = requests.post(
             f"{settings.ollama_base_url}/api/chat",
@@ -91,30 +141,24 @@ def _generate_answer_ollama(
                 "model": settings.ollama_model,
                 "messages": messages,
                 "stream": False,
-                "options": {
-                    "temperature": 0.2,
-                    "num_predict": 512,
-                }
+                "options": {"temperature": 0.2, "num_predict": 512}
             },
             timeout=60
         )
         response.raise_for_status()
         result = response.json()
-        
         content = result.get("message", {}).get("content", "")
         tokens_in = result.get("prompt_eval_count")
         tokens_out = result.get("eval_count")
-        cost = 0.0  # Ollama is free
-        
         return AnswerResult(
             answer=content,
             model=settings.ollama_model,
-            usage=AnswerUsage(tokens_in=tokens_in, tokens_out=tokens_out, cost_estimate=cost),
+            usage=AnswerUsage(tokens_in=tokens_in, tokens_out=tokens_out, cost_estimate=0.0),
         )
     except Exception as e:
         logger.error(f"Ollama error: {e}")
         return AnswerResult(
-            answer=f"Ollama error: {str(e)}. Make sure Ollama is running on {settings.ollama_base_url}",
+            answer=f"Ollama error: {str(e)}. Make sure Ollama is running.",
             model=None,
             usage=None,
         )
@@ -129,8 +173,42 @@ def stream_answer(
     if not context_chunks:
         yield "No relevant context was retrieved for this question."
         return
-    
-    yield from _stream_answer_ollama(query, context_chunks, chat_history, settings)
+
+    if settings.llm_backend == "groq":
+        yield from _stream_answer_groq(query, context_chunks, chat_history, settings)
+    elif settings.llm_backend == "ollama":
+        yield from _stream_answer_ollama(query, context_chunks, chat_history, settings)
+    else:
+        yield "LLM backend not configured. Set LLM_BACKEND=groq or LLM_BACKEND=ollama."
+
+
+def _stream_answer_groq(
+    query: str,
+    context_chunks: list[dict],
+    chat_history: list[dict],
+    settings: Settings,
+) -> Iterator[str]:
+    client = get_groq_client(settings)
+    if client is None:
+        yield "GROQ_API_KEY is missing. Get a free key at https://console.groq.com"
+        return
+
+    messages = build_messages(query, context_chunks, chat_history, settings)
+    try:
+        stream = client.chat.completions.create(
+            model=settings.groq_model,
+            messages=messages,
+            temperature=0.2,
+            max_tokens=512,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield delta.content
+    except Exception as e:
+        logger.error(f"Groq streaming error: {e}")
+        yield f"Groq error: {str(e)}"
 
 
 def _stream_answer_ollama(
@@ -141,17 +219,12 @@ def _stream_answer_ollama(
 ) -> Iterator[str]:
     context_text = build_context(context_chunks)
     context_text = truncate_to_tokens(context_text, settings.max_context_tokens)
-    
-    # Build messages for Ollama
-    messages = []
-    messages.append({"role": "system", "content": SYSTEM_PROMPT})
-    
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     if chat_history:
         messages.extend(chat_history)
-    
     user_prompt = f"Context:\n{context_text}\n\nQuestion: {query}"
     messages.append({"role": "user", "content": user_prompt})
-    
+
     try:
         response = requests.post(
             f"{settings.ollama_base_url}/api/chat",
@@ -159,16 +232,12 @@ def _stream_answer_ollama(
                 "model": settings.ollama_model,
                 "messages": messages,
                 "stream": True,
-                "options": {
-                    "temperature": 0.2,
-                    "num_predict": 512,
-                }
+                "options": {"temperature": 0.2, "num_predict": 512}
             },
             stream=True,
             timeout=60
         )
         response.raise_for_status()
-        
         for line in response.iter_lines():
             if line:
                 chunk = json.loads(line)
@@ -176,7 +245,7 @@ def _stream_answer_ollama(
                     yield chunk["message"]["content"]
     except Exception as e:
         logger.error(f"Ollama streaming error: {e}")
-        yield f"Ollama error: {str(e)}. Make sure Ollama is running on {settings.ollama_base_url}"
+        yield f"Ollama error: {str(e)}"
 
 
 def estimate_prompt_tokens(query: str, context_chunks: list[dict], settings: Settings) -> int:

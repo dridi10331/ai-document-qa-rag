@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     enable_ocr: bool = False
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3"
-    llm_backend: str = "ollama"
+    groq_api_key: str | None = None
+    groq_model: str = "llama-3.1-8b-instant"
+    llm_backend: str = "groq"
     embeddings_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embeddings_backend: str = "hf"
     embeddings_device: str = "cpu"
@@ -45,6 +47,13 @@ class Settings(BaseSettings):
     cost_output_per_1k: float = 0.015
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @field_validator("groq_api_key", mode="before")
+    @classmethod
+    def empty_api_key_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 @lru_cache

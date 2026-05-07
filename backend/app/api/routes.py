@@ -282,8 +282,13 @@ def stream_query(
             add_message(session, session_id, "user", query)
             add_message(session, session_id, "assistant", answer)
 
-        # Model name for Ollama
-        model_name = settings.ollama_model
+        # Determine model name based on backend
+        if settings.llm_backend == "groq":
+            model_name = settings.groq_model
+        elif settings.llm_backend == "ollama":
+            model_name = settings.ollama_model
+        else:
+            model_name = "unknown"
 
         if settings.enable_analytics:
             log = QueryLog(
