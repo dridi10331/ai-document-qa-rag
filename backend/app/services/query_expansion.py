@@ -43,3 +43,5 @@ def expand_query(query: str, settings: Settings, ollama_base_url: str) -> list[s
     except Exception as exc:
         logger.warning("Query expansion failed: %s", exc)
     return []
+
+# Day 4: multi-document reasoning
