@@ -28,7 +28,8 @@
 - **FAISS Vector Search**: Semantic similarity using Groq embeddings (`nomic-embed-text-v1.5`)
 - **BM25 Keyword Search**: Lexical matching with rank-bm25
 - **Score Fusion**: Weighted combination (65% vector + 35% BM25)
-- **Query Expansion**: LLM-generated alternative phrasings for better recall
+- **Query Expansion**: Groq-powered alternative phrasings for better recall
+- **LLM Reranking**: Groq-based relevance scoring to improve chunk ordering
 
 ### 💬 Real-time Q&A
 - **Streaming Responses**: Server-Sent Events (SSE) for token-by-token output
@@ -182,6 +183,7 @@ Full docs: https://rag-backend-u868.onrender.com/docs
 | `POST` | `/query` | RAG query (blocking) |
 | `GET` | `/query/stream` | RAG query (SSE streaming) |
 | `GET` | `/analytics/summary` | Usage analytics |
+| `POST` | `/eval/retrieval` | Retrieval evaluation (scores, rerank, expansion) |
 | `WS` | `/ws/documents/{id}` | Processing status |
 
 ## 🧪 Tests

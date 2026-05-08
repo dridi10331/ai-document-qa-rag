@@ -371,4 +371,65 @@ async def rebuild_all_indexes(session: Session = Depends(get_session)) -> dict:
     await run_in_threadpool(rebuild_indexes, session, settings)
     return {"status": "rebuild_started"}
 
-# Day 4: streaming enhancements
+
+@router.post("/eval/retrieval")
+def evaluate_retrieval(
+    payload: QueryRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    """
+    Basic retrieval evaluation endpoint.
+
+    Returns:
+    - retrieved chunks with scores
+    - retrieval precision proxy (avg score of top-k)
+    - whether query expansion was used
+    - whether reranking was applied
+    - chunk score distribution
+
+    Note: True evaluation requires labeled ground truth (RAGAS/DeepEval).
+    This endpoint provides observable retrieval signals for debugging.
+    """
+    settings = get_settings()
+
+    if not payload.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    from app.services.retrieval import retrieve_chunks
+    retrieval = retrieve_chunks(
+        session=session,
+        query=payload.query,
+        settings=settings,
+        top_k=payload.top_k,
+        document_ids=payload.document_ids,
+        use_hybrid=payload.use_hybrid,
+        enable_query_expansion=payload.enable_query_expansion,
+    )
+
+    scores = [c.score for c in retrieval.chunks if c.score is not None]
+    avg_score = sum(scores) / len(scores) if scores else 0.0
+    max_score = max(scores) if scores else 0.0
+    min_score = min(scores) if scores else 0.0
+
+    return {
+        "query": payload.query,
+        "expanded_query": retrieval.expanded_query,
+        "reranked": retrieval.reranked,
+        "chunks_retrieved": len(retrieval.chunks),
+        "retrieval_metrics": {
+            "avg_score": round(avg_score, 4),
+            "max_score": round(max_score, 4),
+            "min_score": round(min_score, 4),
+            "score_distribution": [round(s, 4) for s in scores],
+        },
+        "chunks": [
+            {
+                "chunk_id": c.chunk_id,
+                "document_name": c.document_name,
+                "page_number": c.page_number,
+                "score": round(c.score, 4) if c.score else None,
+                "text_preview": c.text[:200] if c.text else "",
+            }
+            for c in retrieval.chunks
+        ],
+    }
