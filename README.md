@@ -85,6 +85,18 @@ This is a **demo-scale deployment**, not a production system. Missing for true p
 - Multi-tenant document isolation
 - CI/CD pipeline
 
+### Deployment Constraints (Free Tier)
+
+**Render Free Tier (512MB RAM)**:
+- Cross-encoder reranking disabled by default (sentence-transformers requires ~800MB)
+- Falls back to LLM-based reranking (slower but memory-efficient)
+- Cold start: ~50s wake-up time after 15min inactivity
+- To enable cross-encoder: uncomment `sentence-transformers` in `requirements.txt` and upgrade to paid tier
+
+**CORS Configuration**:
+- Development mode (`ENVIRONMENT=dev`): Allows all origins for testing
+- Production mode: Restricted to `CORS_ORIGINS_STR` environment variable
+
 ## 🚀 Quick Start (Local)
 
 ### Prerequisites
@@ -113,6 +125,35 @@ npm run dev
 ```
 
 Open http://localhost:3000
+
+## 🌍 Deployment
+
+### Vercel (Frontend)
+
+```bash
+cd frontend
+vercel --prod
+```
+
+Set environment variable:
+- `NEXT_PUBLIC_API_BASE`: Your backend URL (e.g., `https://your-backend.onrender.com`)
+
+### Render (Backend)
+
+1. Connect GitHub repository
+2. Select `backend` as root directory
+3. Build command: `pip install -r requirements.txt`
+4. Start command: `python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+5. Set environment variables:
+   - `GROQ_API_KEY`: Your Groq API key
+   - `ENVIRONMENT`: `dev` (allows all CORS origins) or `prod` (restricted)
+   - `RERANKER_TYPE`: `llm` (for free tier) or `cross_encoder` (requires paid tier)
+   - `CORS_ORIGINS_STR`: Comma-separated allowed origins (e.g., `https://your-app.vercel.app`)
+
+**Free Tier Notes**:
+- 512MB RAM limit requires LLM-based reranking (cross-encoder needs ~800MB)
+- Cold start: ~50s wake-up after 15min inactivity
+- Automatic deploys on git push
 
 ## 📁 Project Structure
 
@@ -164,9 +205,16 @@ CORS_ORIGINS_STR=http://localhost:3000
 # Retrieval
 ENABLE_HYBRID_SEARCH=true
 ENABLE_QUERY_EXPANSION=true
+RERANKER_TYPE=llm
 BM25_WEIGHT=0.35
 VECTOR_WEIGHT=0.65
 ```
+
+**Reranker Options**:
+- `none`: No reranking (fastest, lowest quality)
+- `cross_encoder`: Uses sentence-transformers model (best quality, requires ~800MB RAM)
+- `llm`: Uses Groq LLM (good quality, memory-efficient, slower)
+- `auto`: Try cross-encoder, fallback to LLM if unavailable
 
 ### Frontend (`.env.local`)
 
