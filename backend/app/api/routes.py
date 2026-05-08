@@ -378,25 +378,41 @@ def evaluate_retrieval(
     session: Session = Depends(get_session),
 ) -> dict:
     """
-    Basic retrieval evaluation endpoint.
+    Retrieval evaluation endpoint.
 
-    Returns:
-    - retrieved chunks with scores
-    - retrieval precision proxy (avg score of top-k)
-    - whether query expansion was used
-    - whether reranking was applied
-    - chunk score distribution
+    Returns LLM-judged relevance metrics:
+    - Precision@k: fraction of top-k chunks judged relevant
+    - MRR: rank of first relevant result
+    - Rerank gain: precision improvement from reranking
+    - Score distribution: raw retrieval scores
 
-    Note: True evaluation requires labeled ground truth (RAGAS/DeepEval).
-    This endpoint provides observable retrieval signals for debugging.
+    Note: Uses Groq LLM as relevance judge (no labeled ground truth required).
+    For production evaluation, use RAGAS or DeepEval with labeled datasets.
     """
+    import time
+    from app.services.evaluation import evaluate_retrieval as eval_fn
+    from app.services.retrieval import retrieve_chunks
+
     settings = get_settings()
 
     if not payload.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
-    from app.services.retrieval import retrieve_chunks
-    retrieval = retrieve_chunks(
+    start = time.perf_counter()
+
+    # Retrieve without reranking first (for gain comparison)
+    retrieval_base = retrieve_chunks(
+        session=session,
+        query=payload.query,
+        settings=settings,
+        top_k=payload.top_k,
+        document_ids=payload.document_ids,
+        use_hybrid=payload.use_hybrid,
+        enable_query_expansion=False,
+    )
+
+    # Retrieve with full pipeline
+    retrieval_full = retrieve_chunks(
         session=session,
         query=payload.query,
         settings=settings,
@@ -406,30 +422,51 @@ def evaluate_retrieval(
         enable_query_expansion=payload.enable_query_expansion,
     )
 
-    scores = [c.score for c in retrieval.chunks if c.score is not None]
-    avg_score = sum(scores) / len(scores) if scores else 0.0
-    max_score = max(scores) if scores else 0.0
-    min_score = min(scores) if scores else 0.0
+    latency_ms = (time.perf_counter() - start) * 1000
+
+    metrics = eval_fn(
+        query=payload.query,
+        chunks_before_rerank=retrieval_base.chunks,
+        chunks_after_rerank=retrieval_full.chunks,
+        expanded_query=retrieval_full.expanded_query,
+        reranked=retrieval_full.reranked,
+        latency_ms=latency_ms,
+        settings=settings,
+    )
 
     return {
-        "query": payload.query,
-        "expanded_query": retrieval.expanded_query,
-        "reranked": retrieval.reranked,
-        "chunks_retrieved": len(retrieval.chunks),
-        "retrieval_metrics": {
-            "avg_score": round(avg_score, 4),
-            "max_score": round(max_score, 4),
-            "min_score": round(min_score, 4),
-            "score_distribution": [round(s, 4) for s in scores],
+        "query": metrics.query,
+        "expanded_query": metrics.expanded_query,
+        "pipeline": {
+            "query_expansion": metrics.expanded_query is not None,
+            "hybrid_search": payload.use_hybrid if payload.use_hybrid is not None else settings.enable_hybrid_search,
+            "reranking_applied": metrics.reranked,
         },
+        "retrieval_metrics": {
+            "chunks_retrieved": metrics.chunks_retrieved,
+            "avg_score": metrics.avg_score,
+            "max_score": metrics.max_score,
+            "min_score": metrics.min_score,
+            "score_std": metrics.score_std,
+        },
+        "llm_judged_metrics": {
+            "relevance_scores": metrics.relevance_scores,
+            "precision_at_k": metrics.precision_at_k,
+            "mrr": metrics.mrr,
+            "rerank_gain": metrics.rerank_gain,
+        },
+        "latency_ms": metrics.latency_ms,
+        "notes": metrics.notes,
         "chunks": [
             {
+                "rank": i + 1,
                 "chunk_id": c.chunk_id,
                 "document_name": c.document_name,
                 "page_number": c.page_number,
-                "score": round(c.score, 4) if c.score else None,
+                "retrieval_score": round(c.score, 4) if c.score else None,
+                "llm_relevance": metrics.relevance_scores[i] if i < len(metrics.relevance_scores) else None,
                 "text_preview": c.text[:200] if c.text else "",
             }
-            for c in retrieval.chunks
+            for i, c in enumerate(retrieval_full.chunks)
         ],
     }

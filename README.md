@@ -24,12 +24,14 @@
 - **Sliding Window Chunking**: Configurable chunk size and overlap
 - **Metadata Extraction**: Page numbers and document structure
 
-### 🎯 Hybrid Retrieval
+### 🎯 Hybrid Retrieval Pipeline
 - **FAISS Vector Search**: Semantic similarity using Groq embeddings (`nomic-embed-text-v1.5`)
 - **BM25 Keyword Search**: Lexical matching with rank-bm25
 - **Score Fusion**: Weighted combination (65% vector + 35% BM25)
 - **Query Expansion**: Groq-powered alternative phrasings for better recall
 - **LLM Reranking**: Groq-based relevance scoring to improve chunk ordering
+
+> **Reranking note**: Uses Groq LLM as a cross-encoder substitute (simpler integration, free inference). A dedicated cross-encoder like `bge-reranker-base` would be faster and more consistent for production use.
 
 ### 💬 Real-time Q&A
 - **Streaming Responses**: Server-Sent Events (SSE) for token-by-token output
@@ -37,10 +39,13 @@
 - **Chat History**: Persistent conversation context per session
 - **Citations**: Source attribution with page numbers and relevance scores
 
-### 📊 Analytics
-- **Query Logs**: Latency, token usage, model used
+### 📊 Analytics & Evaluation
+- **Query Logs**: Latency, token usage, model used per query
 - **Document Usage**: Most referenced documents
-- **Cost Tracking**: Token-level cost estimation
+- **Retrieval Evaluation**: LLM-judged Precision@k, MRR, rerank gain via `/eval/retrieval`
+- **Pipeline Introspection**: Query expansion variants, reranking applied, score distribution
+
+> **Evaluation note**: `/eval/retrieval` uses Groq as a relevance judge (no labeled ground truth needed). For rigorous benchmarking, integrate [RAGAS](https://github.com/explodinggradients/ragas) or [DeepEval](https://github.com/confident-ai/deepeval) with labeled QA datasets.
 
 ## 🏗️ Architecture
 
@@ -74,11 +79,11 @@
 This is a **demo-scale deployment**, not a production system. Missing for true production:
 - Authentication & authorization
 - Rate limiting & abuse prevention
-- Async ingestion queue (Celery/Redis)
-- Persistent vector store (Qdrant/Weaviate/pgvector)
-- Retrieval evaluation pipeline (RAGAS/DeepEval)
-- Observability (Langfuse/OpenTelemetry)
-- Reranking (cross-encoder/bge-reranker)
+- Async ingestion queue (Celery/Redis) — uploads currently block the request lifecycle
+- Persistent vector store (Qdrant/Weaviate/pgvector) — FAISS is single-node, no concurrent writes
+- Labeled evaluation dataset (RAGAS/DeepEval) — current eval uses LLM as judge, not ground truth
+- Dedicated cross-encoder reranker (bge-reranker) — current reranker uses LLM, slower and nondeterministic
+- Observability (Langfuse/OpenTelemetry/Prometheus)
 - Multi-tenant document isolation
 - CI/CD pipeline
 
@@ -183,7 +188,7 @@ Full docs: https://rag-backend-u868.onrender.com/docs
 | `POST` | `/query` | RAG query (blocking) |
 | `GET` | `/query/stream` | RAG query (SSE streaming) |
 | `GET` | `/analytics/summary` | Usage analytics |
-| `POST` | `/eval/retrieval` | Retrieval evaluation (scores, rerank, expansion) |
+| `POST` | `/eval/retrieval` | Precision@k, MRR, rerank gain, LLM relevance scores |
 | `WS` | `/ws/documents/{id}` | Processing status |
 
 ## 🧪 Tests
