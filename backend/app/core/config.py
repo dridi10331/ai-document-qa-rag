@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     enable_hybrid_search: bool = True
     enable_query_expansion: bool = True
     query_expansion_max: int = 3
+    reranker_type: str = "auto"  # none, cross_encoder, llm, auto
     bm25_weight: float = 0.35
     vector_weight: float = 0.65
     max_context_chunks: int = 6

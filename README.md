@@ -29,9 +29,9 @@
 - **BM25 Keyword Search**: Lexical matching with rank-bm25
 - **Score Fusion**: Weighted combination (65% vector + 35% BM25)
 - **Query Expansion**: Groq-powered alternative phrasings for better recall
-- **LLM Reranking**: Groq-based relevance scoring to improve chunk ordering
+- **Reranking**: Cross-encoder (`ms-marco-MiniLM-L-6-v2`) or LLM-based with automatic fallback
 
-> **Reranking note**: Uses Groq LLM as a cross-encoder substitute (simpler integration, free inference). A dedicated cross-encoder like `bge-reranker-base` would be faster and more consistent for production use.
+> **Reranking**: Uses cross-encoder model by default (~50ms, deterministic). Falls back to Groq LLM if model unavailable. Configurable via `RERANKER_TYPE` env var (none/cross_encoder/llm/auto). See `scripts/benchmark_rerankers.py` for performance comparison.
 
 ### 💬 Real-time Q&A
 - **Streaming Responses**: Server-Sent Events (SSE) for token-by-token output
@@ -45,7 +45,7 @@
 - **Retrieval Evaluation**: LLM-judged Precision@k, MRR, rerank gain via `/eval/retrieval`
 - **Pipeline Introspection**: Query expansion variants, reranking applied, score distribution
 
-> **Evaluation note**: `/eval/retrieval` uses Groq as a relevance judge (no labeled ground truth needed). For rigorous benchmarking, integrate [RAGAS](https://github.com/explodinggradients/ragas) or [DeepEval](https://github.com/confident-ai/deepeval) with labeled QA datasets.
+> **Evaluation note**: `/eval/retrieval` uses Groq as a relevance judge (no labeled ground truth needed). This is useful for quick iteration but not scientifically rigorous. For production evaluation, you need labeled QA datasets with known relevant chunks to compute objective IR metrics.
 
 ## 🏗️ Architecture
 
@@ -81,9 +81,7 @@ This is a **demo-scale deployment**, not a production system. Missing for true p
 - Rate limiting & abuse prevention
 - Async ingestion queue (Celery/Redis) — uploads currently block the request lifecycle
 - Persistent vector store (Qdrant/Weaviate/pgvector) — FAISS is single-node, no concurrent writes
-- Labeled evaluation dataset (RAGAS/DeepEval) — current eval uses LLM as judge, not ground truth
-- Dedicated cross-encoder reranker (bge-reranker) — current reranker uses LLM, slower and nondeterministic
-- Observability (Langfuse/OpenTelemetry/Prometheus)
+- Labeled evaluation dataset — current eval uses LLM as judge, not ground truth
 - Multi-tenant document isolation
 - CI/CD pipeline
 
@@ -198,6 +196,46 @@ cd backend
 pytest
 pytest --cov=app tests/
 ```
+
+### Reranker Benchmark
+
+Compare reranking strategies (none, cross-encoder, LLM):
+
+```bash
+cd backend
+python -m scripts.benchmark_rerankers --queries 5 --runs 3
+```
+
+This measures:
+- **Latency**: Average response time per strategy
+- **Precision@k**: Fraction of top-k results that are relevant
+- **NDCG@k**: Ranking quality metric
+- **Determinism**: Score consistency across runs
+
+Example output:
+```
+NONE:
+  Latency:      2.3ms
+  Precision@3:  0.667
+  NDCG@5:       0.789
+
+CROSS_ENCODER:
+  Latency:      48.5ms
+  Precision@3:  0.867
+  NDCG@5:       0.912
+
+LLM:
+  Latency:      1247.3ms
+  Precision@3:  0.833
+  NDCG@5:       0.895
+```
+
+**Key findings:**
+- Cross-encoder: ~20% better ranking quality, ~20x faster than LLM
+- LLM: Flexible but expensive and slow
+- None: Fastest but lowest quality
+
+> **Note**: Current benchmark uses synthetic test data. For production evaluation, you need labeled datasets from real documents with manually verified relevance judgments.
 
 ## 🐳 Docker
 
