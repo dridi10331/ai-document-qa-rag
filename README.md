@@ -1,6 +1,6 @@
 # 🤖 AI-Powered Document Q&A System
 
-> A deployed full-stack RAG platform for intelligent multi-document question answering with real-time streaming, hybrid search, and analytics.
+> A deployed full-stack RAG platform for multi-document question answering with streaming responses, hybrid search, and retrieval diagnostics.
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115.0-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat&logo=next.js)](https://nextjs.org/)
@@ -33,19 +33,19 @@
 
 > **Reranking**: Uses cross-encoder model by default (~50ms, deterministic). Falls back to Groq LLM if model unavailable. Configurable via `RERANKER_TYPE` env var (none/cross_encoder/llm/auto). See `scripts/benchmark_rerankers.py` for performance comparison.
 
-### 💬 Real-time Q&A
-- **Streaming Responses**: Server-Sent Events (SSE) for token-by-token output
+### 💬 Streaming Q&A Interface
+- **SSE Streaming**: Server-Sent Events for token-by-token output
 - **WebSocket Status**: Live document processing updates
 - **Chat History**: Persistent conversation context per session
 - **Citations**: Source attribution with page numbers and relevance scores
 
-### 📊 Analytics & Evaluation
+### 📊 Retrieval Diagnostics & Analytics
 - **Query Logs**: Latency, token usage, model used per query
 - **Document Usage**: Most referenced documents
 - **Retrieval Evaluation**: LLM-judged Precision@k, MRR, rerank gain via `/eval/retrieval`
-- **Pipeline Introspection**: Query expansion variants, reranking applied, score distribution
+- **Score Tracing**: Query expansion variants, reranking applied, retrieval score distribution
 
-> **Evaluation note**: `/eval/retrieval` uses Groq as a relevance judge (no labeled ground truth needed). This is useful for quick iteration but not scientifically rigorous. For production evaluation, you need labeled QA datasets with known relevant chunks to compute objective IR metrics.
+> **Evaluation note**: `/eval/retrieval` uses Groq as a relevance judge (no labeled ground truth). Benchmarks are directional rather than statistically rigorous due to limited synthetic evaluation data. For production evaluation, use labeled QA datasets with manually verified relevance judgments to compute objective IR metrics.
 
 ## 🏗️ Architecture
 
@@ -73,6 +73,8 @@
 | **Keyword Search** | BM25 | Hybrid retrieval |
 | **Database** | SQLite | Suitable for demo scale |
 | **Hosting** | Vercel + Render (free tier) | Cold start on free plan |
+
+> **Why SQLite?** The project optimizes for local reproducibility and minimal infrastructure complexity. SQLite is sufficient because the focus is retrieval experimentation rather than multi-user transactional workloads. For production with concurrent writes, use PostgreSQL or similar.
 
 ## ⚠️ Known Limitations
 
@@ -283,7 +285,67 @@ LLM:
 - LLM: Flexible but expensive and slow
 - None: Fastest but lowest quality
 
-> **Note**: Current benchmark uses synthetic test data. For production evaluation, you need labeled datasets from real documents with manually verified relevance judgments.
+> **Benchmark limitations**: Metrics are directional comparisons on synthetic test data (small sample size, no adversarial queries). For rigorous evaluation, you need: labeled datasets with graded relevance judgments, diverse query types, larger corpus, and statistical significance testing. Current numbers demonstrate relative performance, not absolute quality.
+
+## 🔍 Known Issues & Failure Cases
+
+### Retrieval Failures
+
+**Query Type: Multi-hop reasoning**
+- Example: "Compare the warranty exclusions across all product manuals"
+- Failure: Retrieval returns chunks from single document, misses cross-document comparison
+- Root cause: Embeddings capture local semantics, not cross-document relationships
+- Current workaround: None (requires query decomposition or graph-based retrieval)
+
+**Query Type: Negation queries**
+- Example: "What is NOT covered by the insurance policy?"
+- Failure: BM25 overweights "covered" and "insurance", returns positive coverage sections
+- Root cause: Keyword search ignores negation semantics
+- Mitigation: Query expansion helps but not reliable
+
+**Query Type: Numerical/temporal reasoning**
+- Example: "Which documents were created after 2023?"
+- Failure: No structured metadata filtering, relies on text matching
+- Root cause: Missing metadata indexing layer
+- Workaround: Manual document filtering in UI
+
+### Chunking Issues
+
+**Problem: List/table splitting**
+- Symptom: Retrieval returns incomplete lists or table fragments
+- Example: Warranty exclusion list split across 3 chunks, only 1 retrieved
+- Current mitigation: Increased overlap from 30 → 50 words (partial fix)
+- Proper fix: Structure-aware chunking (not implemented)
+
+**Problem: Context boundary loss**
+- Symptom: Chunk lacks surrounding context needed for interpretation
+- Example: "The exclusion applies to..." (what exclusion? previous chunk)
+- Mitigation: Overlap helps but not sufficient for long-range dependencies
+
+### Reranking Limitations
+
+**LLM reranking non-determinism**
+- Same query + same chunks → different rankings across runs
+- Impact: Inconsistent user experience, harder to debug
+- Tradeoff: LLM reranking more flexible but less reproducible than cross-encoder
+
+**Cross-encoder domain mismatch**
+- Model trained on MS MARCO (web search), not domain-specific documents
+- Impact: May underperform on specialized terminology (legal, medical, technical)
+- Mitigation: None (fine-tuning cross-encoder not implemented)
+
+### Architecture Constraints
+
+**SQLite write contention**
+- Concurrent document uploads may fail or block
+- Acceptable for demo, not for production multi-user workload
+
+**FAISS single-node limitation**
+- No distributed indexing or concurrent writes
+- Index rebuild blocks all queries (DELETE endpoint)
+- Acceptable for <10k documents, not for large-scale deployment
+
+These limitations are documented to demonstrate retrieval reasoning and debugging methodology, not as defects requiring immediate fixes.
 
 ## 🐳 Docker
 
