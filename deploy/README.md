@@ -28,7 +28,7 @@
 | `GROQ_API_KEY` | your key from https://console.groq.com |
 | `GROQ_MODEL` | `llama-3.1-8b-instant` |
 | `LLM_BACKEND` | `groq` |
-| `EMBEDDINGS_BACKEND` | `mock` |
+| `EMBEDDINGS_BACKEND` | `groq` |
 | `CORS_ORIGINS_STR` | `https://your-app.vercel.app` |
 
 5. Click **Deploy**

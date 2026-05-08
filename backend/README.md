@@ -40,8 +40,8 @@ LLM_BACKEND=groq
 GROQ_API_KEY=your_key_here
 GROQ_MODEL=llama-3.1-8b-instant
 
-# Embeddings
-EMBEDDINGS_BACKEND=mock   # Use 'hf' for real embeddings (requires more RAM)
+# Embeddings (groq = real semantic via nomic-embed-text-v1.5, mock = fast hash-based)
+EMBEDDINGS_BACKEND=groq
 
 # CORS
 CORS_ORIGINS_STR=http://localhost:3000
