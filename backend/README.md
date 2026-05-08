@@ -1,41 +1,87 @@
-# Backend
+# Backend - FastAPI RAG Service
 
-FastAPI service for document ingestion, chunking, retrieval, and analytics.
+FastAPI service for document ingestion, chunking, hybrid retrieval, and AI-powered Q&A using Groq.
 
-## Endpoints
-- POST /documents/upload
-- GET /documents
-- GET /documents/{doc_id}
-- GET /documents/{doc_id}/chunks
-- GET /documents/{doc_id}/status
-- DELETE /documents/{doc_id}
-- GET /health
-- POST /query
-- GET /query/stream
-- GET /analytics/summary
-- POST /sessions
-- GET /sessions
-- GET /sessions/{session_id}/messages
-- WS /ws/documents/{doc_id}
+## 🌐 Live API
 
-## Environment
-Copy the env template:
-- `copy .env.example .env`
+- **Base URL**: https://rag-backend-u868.onrender.com
+- **Docs**: https://rag-backend-u868.onrender.com/docs
 
-**Ollama (Free & Local)**
-The system uses Ollama for LLM. No API keys needed!
+## 📡 Endpoints
 
-## Ollama Setup
-1. Install Ollama from https://ollama.ai
-2. Pull a model: `ollama pull llama3`
-3. Start the backend - it works out of the box!
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check |
+| `POST` | `/documents/upload` | Upload documents |
+| `GET` | `/documents` | List all documents |
+| `GET` | `/documents/{id}` | Get document details |
+| `GET` | `/documents/{id}/chunks` | Get document chunks |
+| `GET` | `/documents/{id}/status` | Get processing status |
+| `DELETE` | `/documents/{id}` | Delete document |
+| `POST` | `/query` | Ask a question |
+| `GET` | `/query/stream` | Stream answer (SSE) |
+| `GET` | `/analytics/summary` | Analytics summary |
+| `POST` | `/sessions` | Create chat session |
+| `GET` | `/sessions` | List sessions |
+| `GET` | `/sessions/{id}/messages` | Get chat history |
+| `WS` | `/ws/documents/{id}` | Live status updates |
 
-## OCR Notes
+## ⚙️ Environment Setup
+
+```bash
+copy .env.example .env
+```
+
+Required variables:
+
+```env
+# LLM (Groq - free at https://console.groq.com)
+LLM_BACKEND=groq
+GROQ_API_KEY=your_key_here
+GROQ_MODEL=llama-3.1-8b-instant
+
+# Embeddings
+EMBEDDINGS_BACKEND=mock   # Use 'hf' for real embeddings (requires more RAM)
+
+# CORS
+CORS_ORIGINS_STR=http://localhost:3000
+```
+
+## 🚀 Run Locally
+
+```bash
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## 🧪 Tests
+
+```bash
+pytest
+pytest --cov=app tests/
+```
+
+## 📦 Requirements
+
+Key dependencies:
+- `fastapi` - Web framework
+- `groq` - LLM inference (free)
+- `faiss-cpu` - Vector search
+- `rank-bm25` - Keyword search
+- `sqlmodel` - Database ORM
+- `PyPDF2`, `python-docx` - Document parsing
+
+## 🔍 Architecture
+
+```
+Upload → Parse → Chunk → Embed → Index (FAISS + BM25)
+Query → Expand → Retrieve → Rank → Generate (Groq) → Stream
+```
+
+## 📝 OCR Notes
+
 OCR requires system installs:
 - Tesseract OCR
 - Poppler (for pdf2image)
 
-If not installed, OCR is skipped and empty pages remain empty.
-
-## Tests
-- `pytest`
+Set `ENABLE_OCR=true` in `.env` to enable.

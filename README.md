@@ -4,8 +4,16 @@
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115.0-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat&logo=next.js)](https://nextjs.org/)
-[![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-blue?style=flat)](https://ollama.ai/)
+[![Groq](https://img.shields.io/badge/Groq-Free%20LLM-orange?style=flat)](https://console.groq.com/)
+[![Vercel](https://img.shields.io/badge/Vercel-Deployed-black?style=flat&logo=vercel)](https://ai-document-qa-rag.vercel.app)
+[![Render](https://img.shields.io/badge/Render-Deployed-blue?style=flat)](https://rag-backend-u868.onrender.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+## 🌐 Live Demo
+
+- **Frontend**: https://ai-document-qa-rag.vercel.app
+- **Backend API**: https://rag-backend-u868.onrender.com
+- **API Docs**: https://rag-backend-u868.onrender.com/docs
 
 ## ✨ Features
 
@@ -28,20 +36,20 @@
 
 ### 📊 Analytics & Monitoring
 - **Query Analytics**: Track usage patterns, latency, and performance
-- **Cost Estimation**: Token usage and cost tracking
+- **Token Usage**: Track tokens in/out per query
 - **Document Insights**: Most-used documents and citation analysis
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌─────────────┐
-│   Next.js   │─────▶│   FastAPI    │─────▶│   Ollama    │
-│  Frontend   │      │   Backend    │      │  (Local LLM)│
-└─────────────┘      └──────────────┘      └─────────────┘
-                            │
-                            ├─────▶ FAISS (Vector DB)
-                            ├─────▶ BM25 (Keyword Search)
-                            └─────▶ SQLite (Metadata)
+┌─────────────────┐      ┌──────────────────┐      ┌─────────────┐
+│   Next.js 14    │─────▶│   FastAPI        │─────▶│  Groq API   │
+│  (Vercel)       │      │   (Render)       │      │  (Free LLM) │
+└─────────────────┘      └──────────────────┘      └─────────────┘
+                                  │
+                                  ├─────▶ FAISS (Vector DB)
+                                  ├─────▶ BM25 (Keyword Search)
+                                  └─────▶ SQLite (Metadata)
 ```
 
 ### Technology Stack
@@ -50,54 +58,38 @@
 |-----------|-----------|---------|
 | **Backend** | FastAPI | High-performance async API |
 | **Frontend** | Next.js 14 | Modern React framework with SSR |
-| **LLM** | Ollama | Local, free language models |
+| **LLM** | Groq (llama-3.1-8b-instant) | Free, fast language model |
 | **Vector DB** | FAISS | Fast similarity search |
-| **Embeddings** | SentenceTransformers | HuggingFace embeddings |
 | **Search** | BM25 | Keyword-based retrieval |
 | **Database** | SQLite | Metadata and analytics |
+| **Hosting** | Vercel + Render | Free production deployment |
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Local)
 
 ### Prerequisites
-
-- Python 3.10+
+- Python 3.11+
 - Node.js 18+
-- [Ollama](https://ollama.ai/) installed and running
+- Free [Groq API key](https://console.groq.com/keys)
 
-### 1️⃣ Install Ollama
-
-```bash
-# Download and install from https://ollama.ai
-# Then pull a model:
-ollama pull llama3
-```
-
-### 2️⃣ Backend Setup
+### 1️⃣ Backend Setup
 
 ```bash
-# Navigate to backend directory
 cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Configure environment
 copy .env.example .env
+# Add your GROQ_API_KEY to .env
 
 # Run the API server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The API will be available at `http://localhost:8000`
-
-### 3️⃣ Frontend Setup
+### 2️⃣ Frontend Setup
 
 ```bash
-# Navigate to frontend directory
 cd frontend
 
 # Install dependencies
@@ -105,12 +97,13 @@ npm install
 
 # Configure environment
 copy .env.local.example .env.local
+# Set NEXT_PUBLIC_API_BASE=http://localhost:8000
 
 # Run the development server
 npm run dev
 ```
 
-The UI will be available at `http://localhost:3000`
+Open http://localhost:3000
 
 ## 📁 Project Structure
 
@@ -120,22 +113,29 @@ The UI will be available at `http://localhost:3000`
 │   ├── app/
 │   │   ├── api/            # API routes
 │   │   ├── core/           # Configuration
-│   │   ├── db/             # Database models
+│   │   ├── db/             # Database models & CRUD
 │   │   ├── schemas/        # Pydantic schemas
 │   │   ├── services/       # Business logic
+│   │   │   ├── llm.py      # Groq/Ollama integration
+│   │   │   ├── retrieval.py # Hybrid search
+│   │   │   ├── embeddings.py # Vector embeddings
+│   │   │   ├── chunking.py  # Document chunking
+│   │   │   └── ...
 │   │   └── utils/          # Utilities
-│   ├── data/               # Document storage
 │   ├── tests/              # Unit tests
+│   ├── .python-version     # Python 3.11.9
 │   └── requirements.txt
 │
 ├── frontend/               # Next.js frontend
 │   ├── app/               # App router pages
 │   ├── components/        # React components
-│   ├── lib/               # Utilities
+│   ├── lib/api.ts         # API client with SSE
 │   └── package.json
 │
 └── deploy/                # Deployment configs
     ├── docker-compose.yml
+    ├── backend.Dockerfile
+    ├── frontend.Dockerfile
     └── k8s/              # Kubernetes manifests
 ```
 
@@ -144,38 +144,34 @@ The UI will be available at `http://localhost:3000`
 ### Backend Environment Variables
 
 ```env
-# Ollama Configuration
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3
-LLM_BACKEND=ollama
+# LLM Backend
+LLM_BACKEND=groq
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=llama-3.1-8b-instant
 
-# Embeddings
-EMBEDDINGS_MODEL=sentence-transformers/all-MiniLM-L6-v2
-EMBEDDINGS_BACKEND=hf
+# Embeddings (use mock for fast startup)
+EMBEDDINGS_BACKEND=mock
 
-# Search Configuration
+# CORS
+CORS_ORIGINS_STR=http://localhost:3000
+
+# Search
 ENABLE_HYBRID_SEARCH=true
 ENABLE_QUERY_EXPANSION=true
 BM25_WEIGHT=0.35
 VECTOR_WEIGHT=0.65
-
-# Chunking
-CHUNK_MIN_WORDS=120
-CHUNK_MAX_WORDS=320
-CHUNK_OVERLAP_WORDS=60
 ```
 
 ### Frontend Environment Variables
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_BASE=http://localhost:8000
 ```
 
 ## 📚 API Documentation
 
-Once the backend is running, visit:
-- **Interactive Docs**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+- **Interactive Docs**: https://rag-backend-u868.onrender.com/docs
+- **ReDoc**: https://rag-backend-u868.onrender.com/redoc
 
 ### Key Endpoints
 
@@ -183,95 +179,44 @@ Once the backend is running, visit:
 |--------|----------|-------------|
 | `POST` | `/documents/upload` | Upload documents |
 | `GET` | `/documents` | List all documents |
-| `GET` | `/documents/{id}` | Get document details |
 | `DELETE` | `/documents/{id}` | Delete document |
 | `POST` | `/query` | Ask a question |
-| `GET` | `/query/stream` | Stream answer tokens |
+| `GET` | `/query/stream` | Stream answer (SSE) |
 | `GET` | `/analytics/summary` | Get analytics |
-| `WS` | `/ws/documents/{id}` | Document status updates |
+| `WS` | `/ws/documents/{id}` | Live status updates |
 
 ## 🧪 Testing
 
 ```bash
-# Run backend tests
 cd backend
 pytest
-
-# Run with coverage
 pytest --cov=app tests/
 ```
 
 ## 🐳 Docker Deployment
 
 ```bash
-# Build and run with Docker Compose
-docker-compose -f deploy/docker-compose.yml up --build
+cp backend/.env.example backend/.env
+# Edit backend/.env with your GROQ_API_KEY
 
-# Access the application
-# Frontend: http://localhost:3000
-# Backend: http://localhost:8000
+docker-compose -f deploy/docker-compose.yml up --build
 ```
 
 ## ☸️ Kubernetes Deployment
 
 ```bash
-# Apply Kubernetes manifests
+kubectl create secret generic rag-secrets \
+  --from-literal=groq-api-key=your_groq_api_key
+
 kubectl apply -f deploy/k8s/
-
-# Check deployment status
 kubectl get pods
-kubectl get services
-```
-
-## 🎨 Available Models
-
-The system works with any Ollama model. Popular choices:
-
-- **llama3** (Recommended) - Fast and accurate
-- **mistral** - Excellent for reasoning
-- **codellama** - Great for technical documents
-- **phi3** - Lightweight and fast
-
-```bash
-# Pull additional models
-ollama pull mistral
-ollama pull codellama
-```
-
-## 🔍 Advanced Features
-
-### Query Expansion
-Automatically generates alternative phrasings of queries for better retrieval:
-```python
-ENABLE_QUERY_EXPANSION=true
-QUERY_EXPANSION_MAX=3
-```
-
-### Hybrid Search
-Combines semantic (vector) and keyword (BM25) search:
-```python
-ENABLE_HYBRID_SEARCH=true
-BM25_WEIGHT=0.35
-VECTOR_WEIGHT=0.65
-```
-
-### OCR Support
-Enable OCR for scanned documents:
-```bash
-# Install system dependencies
-# Tesseract: https://github.com/tesseract-ocr/tesseract
-# Poppler: https://poppler.freedesktop.org/
-
-# Enable in .env
-ENABLE_OCR=true
 ```
 
 ## 📊 Performance
 
-- **Ingestion**: ~1-2 seconds per page
-- **Query Latency**: 2-5 seconds (depends on model)
-- **Concurrent Users**: 50+ (with proper scaling)
-- **Document Limit**: No hard limit (storage dependent)
+- **Upload & Chunking**: ~2-3 seconds per document
+- **Query Latency**: ~1 second (Groq is very fast)
+- **Cost**: $0.00 (Groq free tier)
 
 ## 🤝 Contributing
 
@@ -279,22 +224,17 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ## 🙏 Acknowledgments
 
-- [Ollama](https://ollama.ai/) - Local LLM runtime
+- [Groq](https://groq.com/) - Ultra-fast free LLM inference
 - [FAISS](https://github.com/facebookresearch/faiss) - Vector similarity search
-- [SentenceTransformers](https://www.sbert.net/) - Embeddings
 - [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
 - [Next.js](https://nextjs.org/) - React framework
-
-## 📞 Support
-
-For issues and questions:
-- Open an [Issue](https://github.com/yourusername/rag-system/issues)
-- Check the [Documentation](./docs)
+- [Vercel](https://vercel.com/) - Frontend hosting
+- [Render](https://render.com/) - Backend hosting
 
 ---
 
-**Built with ❤️ using Ollama for free, local AI**
+**Built with ❤️ | Live at https://ai-document-qa-rag.vercel.app**
