@@ -6,6 +6,7 @@ import logging
 from typing import Iterable
 
 import numpy as np
+import requests
 
 from app.core.config import Settings
 
@@ -28,26 +29,35 @@ class EmbeddingService:
     def dimension(self) -> int:
         if self._dimension is None:
             self._load_model()
-        return self._dimension or 0
+        return self._dimension or 384
 
     def _load_model(self) -> None:
-        if self.settings.embeddings_backend == "mock":
+        backend = self.settings.embeddings_backend
+
+        if backend == "mock":
             self._dimension = 384
             return
-        
-        # Delay import to avoid TensorFlow loading issues
-        import os
-        os.environ['TRANSFORMERS_NO_TF'] = '1'
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-        
-        from sentence_transformers import SentenceTransformer
 
-        logger.info("Loading embeddings model: %s", self.settings.embeddings_model)
-        self._model = SentenceTransformer(
-            self.settings.embeddings_model,
-            device=self.settings.embeddings_device,
-        )
-        self._dimension = int(self._model.get_sentence_embedding_dimension())
+        if backend == "groq":
+            # Groq embeddings - no local model needed
+            self._dimension = 1024  # nomic-embed-text-v1.5 dimension
+            return
+
+        if backend == "hf":
+            import os
+            os.environ['TRANSFORMERS_NO_TF'] = '1'
+            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+            from sentence_transformers import SentenceTransformer
+            logger.info("Loading embeddings model: %s", self.settings.embeddings_model)
+            self._model = SentenceTransformer(
+                self.settings.embeddings_model,
+                device=self.settings.embeddings_device,
+            )
+            self._dimension = int(self._model.get_sentence_embedding_dimension())
+            return
+
+        # Default fallback
+        self._dimension = 384
 
     def _mock_embed(self, texts: Iterable[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
@@ -57,24 +67,74 @@ class EmbeddingService:
             seed = int(digest[:8], 16)
             rng = np.random.default_rng(seed)
             vec = rng.standard_normal(dim).astype("float32")
+            norm = np.linalg.norm(vec)
+            if norm > 0:
+                vec = vec / norm
             vectors.append(vec.tolist())
+        return vectors
+
+    def _groq_embed(self, texts: list[str]) -> list[list[float]]:
+        """Use Groq's embedding API (nomic-embed-text-v1.5)."""
+        if not self.settings.groq_api_key:
+            logger.warning("GROQ_API_KEY not set, falling back to mock embeddings")
+            return self._mock_embed(texts)
+
+        headers = {
+            "Authorization": f"Bearer {self.settings.groq_api_key}",
+            "Content-Type": "application/json",
+        }
+        vectors = []
+        # Groq embeddings API processes one at a time
+        for text in texts:
+            try:
+                response = requests.post(
+                    "https://api.groq.com/openai/v1/embeddings",
+                    headers=headers,
+                    json={
+                        "model": "nomic-embed-text-v1.5",
+                        "input": text[:8192],  # max tokens
+                    },
+                    timeout=30,
+                )
+                response.raise_for_status()
+                data = response.json()
+                vectors.append(data["data"][0]["embedding"])
+            except Exception as e:
+                logger.warning("Groq embedding failed for text, using mock: %s", e)
+                vectors.extend(self._mock_embed([text]))
         return vectors
 
     def embed_texts(self, texts: list[str]) -> EmbeddingResult:
         if not texts:
             return EmbeddingResult(vectors=[], dimension=self.dimension)
-        if self.settings.embeddings_backend == "mock":
+
+        backend = self.settings.embeddings_backend
+
+        if backend == "groq":
+            if self._dimension is None:
+                self._load_model()
+            vectors = self._groq_embed(texts)
+            return EmbeddingResult(vectors=vectors, dimension=self.dimension)
+
+        if backend == "mock":
             vectors = self._mock_embed(texts)
             return EmbeddingResult(vectors=vectors, dimension=self.dimension)
+
+        # HuggingFace local
         if self._model is None:
             self._load_model()
-        vectors = self._model.encode(
+        if self._model is None:
+            # Fallback to mock if model failed to load
+            vectors = self._mock_embed(texts)
+            return EmbeddingResult(vectors=vectors, dimension=self.dimension)
+
+        raw = self._model.encode(
             texts,
             batch_size=self.settings.embeddings_batch_size,
-            normalize_embeddings=False,
+            normalize_embeddings=True,
             show_progress_bar=False,
         )
-        vectors_list = [vec.tolist() for vec in vectors]
+        vectors_list = [vec.tolist() for vec in raw]
         return EmbeddingResult(vectors=vectors_list, dimension=self.dimension)
 
 

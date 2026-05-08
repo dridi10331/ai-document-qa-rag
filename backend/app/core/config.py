@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.1-8b-instant"
     llm_backend: str = "groq"
     embeddings_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    embeddings_backend: str = "hf"
+    embeddings_backend: str = "groq"
     embeddings_device: str = "cpu"
     embeddings_batch_size: int = 32
     vector_index_path: Path = Path("data/processed/faiss.index")

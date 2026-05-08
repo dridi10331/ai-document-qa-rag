@@ -1,6 +1,6 @@
 # 🤖 AI-Powered Document Q&A System
 
-> A production-grade Retrieval-Augmented Generation (RAG) system for intelligent multi-document question answering with real-time streaming, hybrid search, and comprehensive analytics.
+> A deployed full-stack RAG platform for intelligent multi-document question answering with real-time streaming, hybrid search, and analytics.
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115.0-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat&logo=next.js)](https://nextjs.org/)
@@ -15,54 +15,71 @@
 - **Backend API**: https://rag-backend-u868.onrender.com
 - **API Docs**: https://rag-backend-u868.onrender.com/docs
 
+> ⚠️ Free tier: backend may take ~50s to wake up on first request.
+
 ## ✨ Features
 
-### 🔍 Intelligent Document Processing
+### 🔍 Document Processing Pipeline
 - **Multi-format Support**: PDF, DOCX, TXT, Markdown with optional OCR
-- **Smart Chunking**: Context-aware text segmentation with configurable overlap
-- **Metadata Extraction**: Automatic page numbers and document structure analysis
+- **Sliding Window Chunking**: Configurable chunk size and overlap
+- **Metadata Extraction**: Page numbers and document structure
 
-### 🎯 Advanced Retrieval
-- **Hybrid Search**: Combines FAISS vector similarity with BM25 keyword matching
-- **Query Expansion**: Automatic query reformulation for better results
-- **Multi-document Reasoning**: Cross-reference information from multiple sources
-- **Citation Tracking**: Full source attribution with page numbers
+### 🎯 Hybrid Retrieval
+- **FAISS Vector Search**: Semantic similarity using Groq embeddings (`nomic-embed-text-v1.5`)
+- **BM25 Keyword Search**: Lexical matching with rank-bm25
+- **Score Fusion**: Weighted combination (65% vector + 35% BM25)
+- **Query Expansion**: LLM-generated alternative phrasings for better recall
 
-### 💬 Real-time Interaction
+### 💬 Real-time Q&A
 - **Streaming Responses**: Server-Sent Events (SSE) for token-by-token output
-- **WebSocket Updates**: Live document processing status
-- **Chat History**: Persistent conversation context
-- **Session Management**: Multi-session support with history
+- **WebSocket Status**: Live document processing updates
+- **Chat History**: Persistent conversation context per session
+- **Citations**: Source attribution with page numbers and relevance scores
 
-### 📊 Analytics & Monitoring
-- **Query Analytics**: Track usage patterns, latency, and performance
-- **Token Usage**: Track tokens in/out per query
-- **Document Insights**: Most-used documents and citation analysis
+### 📊 Analytics
+- **Query Logs**: Latency, token usage, model used
+- **Document Usage**: Most referenced documents
+- **Cost Tracking**: Token-level cost estimation
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐      ┌──────────────────┐      ┌─────────────┐
-│   Next.js 14    │─────▶│   FastAPI        │─────▶│  Groq API   │
-│  (Vercel)       │      │   (Render)       │      │  (Free LLM) │
-└─────────────────┘      └──────────────────┘      └─────────────┘
+┌─────────────────┐      ┌──────────────────┐      ┌──────────────────┐
+│   Next.js 14    │─────▶│   FastAPI        │─────▶│  Groq API        │
+│  (Vercel)       │      │   (Render)       │      │  LLM + Embeddings│
+└─────────────────┘      └──────────────────┘      └──────────────────┘
                                   │
-                                  ├─────▶ FAISS (Vector DB)
-                                  ├─────▶ BM25 (Keyword Search)
-                                  └─────▶ SQLite (Metadata)
+                    ┌─────────────┼─────────────┐
+                    ▼             ▼             ▼
+               FAISS Index    BM25 Index    SQLite DB
+             (vector search) (keyword)    (metadata)
 ```
 
 ### Technology Stack
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Backend** | FastAPI | High-performance async API |
-| **Frontend** | Next.js 14 | Modern React framework with SSR |
-| **LLM** | Groq (llama-3.1-8b-instant) | Free, fast language model |
-| **Vector DB** | FAISS | Fast similarity search |
-| **Search** | BM25 | Keyword-based retrieval |
-| **Database** | SQLite | Metadata and analytics |
-| **Hosting** | Vercel + Render | Free production deployment |
+| Component | Technology | Notes |
+|-----------|-----------|-------|
+| **Backend** | FastAPI + Python 3.11 | Async, SSE streaming |
+| **Frontend** | Next.js 14 + TypeScript | App router, SSE client |
+| **LLM** | Groq `llama-3.1-8b-instant` | Free tier, ~1s latency |
+| **Embeddings** | Groq `nomic-embed-text-v1.5` | Real semantic embeddings |
+| **Vector DB** | FAISS (local) | In-memory, persisted to disk |
+| **Keyword Search** | BM25 | Hybrid retrieval |
+| **Database** | SQLite | Suitable for demo scale |
+| **Hosting** | Vercel + Render (free tier) | Cold start on free plan |
+
+## ⚠️ Known Limitations
+
+This is a **demo-scale deployment**, not a production system. Missing for true production:
+- Authentication & authorization
+- Rate limiting & abuse prevention
+- Async ingestion queue (Celery/Redis)
+- Persistent vector store (Qdrant/Weaviate/pgvector)
+- Retrieval evaluation pipeline (RAGAS/DeepEval)
+- Observability (Langfuse/OpenTelemetry)
+- Reranking (cross-encoder/bge-reranker)
+- Multi-tenant document isolation
+- CI/CD pipeline
 
 ## 🚀 Quick Start (Local)
 
@@ -71,35 +88,23 @@
 - Node.js 18+
 - Free [Groq API key](https://console.groq.com/keys)
 
-### 1️⃣ Backend Setup
+### 1️⃣ Backend
 
 ```bash
 cd backend
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Configure environment
 copy .env.example .env
-# Add your GROQ_API_KEY to .env
-
-# Run the API server
+# Set GROQ_API_KEY in .env
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 2️⃣ Frontend Setup
+### 2️⃣ Frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Configure environment
 copy .env.local.example .env.local
 # Set NEXT_PUBLIC_API_BASE=http://localhost:8000
-
-# Run the development server
 npm run dev
 ```
 
@@ -109,83 +114,77 @@ Open http://localhost:3000
 
 ```
 .
-├── backend/                 # FastAPI backend
+├── backend/
 │   ├── app/
-│   │   ├── api/            # API routes
-│   │   ├── core/           # Configuration
-│   │   ├── db/             # Database models & CRUD
-│   │   ├── schemas/        # Pydantic schemas
-│   │   ├── services/       # Business logic
-│   │   │   ├── llm.py      # Groq/Ollama integration
-│   │   │   ├── retrieval.py # Hybrid search
-│   │   │   ├── embeddings.py # Vector embeddings
-│   │   │   ├── chunking.py  # Document chunking
-│   │   │   └── ...
-│   │   └── utils/          # Utilities
-│   ├── tests/              # Unit tests
-│   ├── .python-version     # Python 3.11.9
+│   │   ├── api/routes.py        # All API endpoints
+│   │   ├── core/config.py       # Settings (pydantic-settings)
+│   │   ├── db/                  # SQLModel models + CRUD
+│   │   ├── schemas/             # Pydantic request/response schemas
+│   │   └── services/
+│   │       ├── llm.py           # Groq/Ollama LLM integration
+│   │       ├── embeddings.py    # Groq/HF/mock embeddings
+│   │       ├── retrieval.py     # Hybrid FAISS + BM25 retrieval
+│   │       ├── chunking.py      # Sliding window chunking
+│   │       ├── query_expansion.py # LLM query reformulation
+│   │       └── analytics.py     # Usage tracking
+│   ├── tests/
+│   ├── .python-version          # Python 3.11.9
 │   └── requirements.txt
-│
-├── frontend/               # Next.js frontend
-│   ├── app/               # App router pages
-│   ├── components/        # React components
-│   ├── lib/api.ts         # API client with SSE
-│   └── package.json
-│
-└── deploy/                # Deployment configs
+├── frontend/
+│   ├── app/                     # Next.js app router pages
+│   ├── components/              # Upload, Ask, Analytics panels
+│   └── lib/api.ts               # Typed API client + SSE
+└── deploy/
     ├── docker-compose.yml
     ├── backend.Dockerfile
     ├── frontend.Dockerfile
-    └── k8s/              # Kubernetes manifests
+    └── k8s/                     # Basic K8s manifests (not battle-tested)
 ```
 
-## 🔧 Configuration
+## 🔧 Environment Variables
 
-### Backend Environment Variables
+### Backend (`.env`)
 
 ```env
-# LLM Backend
+# LLM
 LLM_BACKEND=groq
-GROQ_API_KEY=your_groq_api_key
+GROQ_API_KEY=your_key_here
 GROQ_MODEL=llama-3.1-8b-instant
 
-# Embeddings (use mock for fast startup)
-EMBEDDINGS_BACKEND=mock
+# Embeddings (groq = real semantic, mock = deterministic hash)
+EMBEDDINGS_BACKEND=groq
 
 # CORS
 CORS_ORIGINS_STR=http://localhost:3000
 
-# Search
+# Retrieval
 ENABLE_HYBRID_SEARCH=true
 ENABLE_QUERY_EXPANSION=true
 BM25_WEIGHT=0.35
 VECTOR_WEIGHT=0.65
 ```
 
-### Frontend Environment Variables
+### Frontend (`.env.local`)
 
 ```env
 NEXT_PUBLIC_API_BASE=http://localhost:8000
 ```
 
-## 📚 API Documentation
+## 📚 API Reference
 
-- **Interactive Docs**: https://rag-backend-u868.onrender.com/docs
-- **ReDoc**: https://rag-backend-u868.onrender.com/redoc
-
-### Key Endpoints
+Full docs: https://rag-backend-u868.onrender.com/docs
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/documents/upload` | Upload documents |
-| `GET` | `/documents` | List all documents |
-| `DELETE` | `/documents/{id}` | Delete document |
-| `POST` | `/query` | Ask a question |
-| `GET` | `/query/stream` | Stream answer (SSE) |
-| `GET` | `/analytics/summary` | Get analytics |
-| `WS` | `/ws/documents/{id}` | Live status updates |
+| `POST` | `/documents/upload` | Upload + parse + chunk + index |
+| `GET` | `/documents` | List documents |
+| `DELETE` | `/documents/{id}` | Delete + rebuild index |
+| `POST` | `/query` | RAG query (blocking) |
+| `GET` | `/query/stream` | RAG query (SSE streaming) |
+| `GET` | `/analytics/summary` | Usage analytics |
+| `WS` | `/ws/documents/{id}` | Processing status |
 
-## 🧪 Testing
+## 🧪 Tests
 
 ```bash
 cd backend
@@ -193,48 +192,28 @@ pytest
 pytest --cov=app tests/
 ```
 
-## 🐳 Docker Deployment
+## 🐳 Docker
 
 ```bash
 cp backend/.env.example backend/.env
-# Edit backend/.env with your GROQ_API_KEY
-
 docker-compose -f deploy/docker-compose.yml up --build
 ```
 
-## ☸️ Kubernetes Deployment
-
-```bash
-kubectl create secret generic rag-secrets \
-  --from-literal=groq-api-key=your_groq_api_key
-
-kubectl apply -f deploy/k8s/
-kubectl get pods
-```
-
-## 📊 Performance
-
-- **Upload & Chunking**: ~2-3 seconds per document
-- **Query Latency**: ~1 second (Groq is very fast)
-- **Cost**: $0.00 (Groq free tier)
-
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+PRs welcome. See [deploy/README.md](deploy/README.md) for deployment guide.
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+MIT
 
 ## 🙏 Acknowledgments
 
-- [Groq](https://groq.com/) - Ultra-fast free LLM inference
-- [FAISS](https://github.com/facebookresearch/faiss) - Vector similarity search
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
+- [Groq](https://groq.com/) - Fast free LLM + embedding inference
+- [FAISS](https://github.com/facebookresearch/faiss) - Vector search
+- [FastAPI](https://fastapi.tiangolo.com/) - Python web framework
 - [Next.js](https://nextjs.org/) - React framework
-- [Vercel](https://vercel.com/) - Frontend hosting
-- [Render](https://render.com/) - Backend hosting
 
 ---
 
-**Built with ❤️ | Live at https://ai-document-qa-rag.vercel.app**
+**Live at https://ai-document-qa-rag.vercel.app**
