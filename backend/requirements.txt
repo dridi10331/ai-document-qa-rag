@@ -13,7 +13,7 @@ httpx==0.27.2
 requests==2.33.1
 groq>=0.30.0
 rank-bm25==0.2.2
-sentence-transformers==3.3.1
+# sentence-transformers==3.3.1  # Optional: Uncomment for cross-encoder reranking (requires more RAM)
 pytesseract==0.3.10
 pdf2image==1.17.0
 Pillow==10.4.0
