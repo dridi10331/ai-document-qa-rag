@@ -1,0 +1,36 @@
+{
+  "name": "sample_technical",
+  "description": "Sample technical documentation queries for demonstration. Replace with real labeled data from your documents.",
+  "queries": [
+    {
+      "query": "How do I configure the database connection?",
+      "relevant_chunk_ids": [],
+      "category": "procedural",
+      "note": "Add actual chunk IDs after indexing your documents"
+    },
+    {
+      "query": "What are the authentication requirements?",
+      "relevant_chunk_ids": [],
+      "category": "factual",
+      "note": "Add actual chunk IDs after indexing your documents"
+    },
+    {
+      "query": "Explain the caching strategy",
+      "relevant_chunk_ids": [],
+      "category": "conceptual",
+      "note": "Add actual chunk IDs after indexing your documents"
+    },
+    {
+      "query": "What error codes are returned by the API?",
+      "relevant_chunk_ids": [],
+      "category": "reference",
+      "note": "Add actual chunk IDs after indexing your documents"
+    },
+    {
+      "query": "How do I handle rate limiting?",
+      "relevant_chunk_ids": [],
+      "category": "procedural",
+      "note": "Add actual chunk IDs after indexing your documents"
+    }
+  ]
+}
