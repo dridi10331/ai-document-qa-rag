@@ -1,166 +1,329 @@
 # 🤖 Instrumented Hybrid RAG System
 
-> **Core Innovation**: RAG systems fail silently due to lack of per-stage observability; this system turns retrieval into a debuggable distributed pipeline where every decision is observable, measurable, and explainable.
+Instrumented hybrid retrieval pipeline designed to analyze retrieval failures, ranking behavior, and latency tradeoffs under constrained compute environments (512MB RAM).
 
-Production-style retrieval pipeline for analyzing RAG behavior under constrained compute (512MB RAM).
+---
 
-[Live Demo](https://ai-document-qa-rag.vercel.app) • [API Docs](https://rag-backend-u868.onrender.com/docs)
+# Overview
 
-## What This Solves
+This system separates retrieval into independent stages:
 
-Upload documents → Ask questions → Get answers with citations → **Inspect why each chunk was retrieved or ranked**
+- Recall → Hybrid retrieval (FAISS + BM25)
+- Precision → Reranking
+- Observability → Full pipeline instrumentation
 
-**Architecture**: Separates recall (hybrid FAISS + BM25), precision (reranking), and observability (full pipeline instrumentation) as independent layers.
+The goal is not simply answering questions from documents, but exposing *why* certain chunks were retrieved, ranked, or discarded.
 
-## Architecture
+---
 
+# System Architecture
+
+```text
+Query
+  ↓
+Query Expansion
+  ↓
+Hybrid Retrieval (FAISS + BM25)
+  ↓
+Score Fusion
+  ↓
+Reranking
+  ↓
+Generation + Instrumentation Logs
 ```
-Query → Expansion → Hybrid Retrieval (FAISS + BM25) → 
-Fusion (65/35) → Reranking (cross-encoder/LLM) → 
-Generation → Response + Observability Logs
-```
 
-## Engineering Contributions
+---
 
-### 1. Instrumented Retrieval Pipeline (Core Differentiator)
+# What the System Provides
 
-Every stage emits structured metrics: chunk scores, fusion values, reranker deltas, latency per stage.
+- Document upload and indexing
+- Streaming RAG inference
+- Citation-based responses
+- Retrieval trace inspection
+- Per-stage latency analysis
+- Score-level observability
 
-**Logged per request**: Query expansion variants, FAISS scores, BM25 scores, fusion results, reranking deltas, latency breakdown, token usage.
+The system exposes how:
+- query expansion,
+- retrieval,
+- fusion,
+- reranking
 
-**Enables debugging which stage caused retrieval failure** (expansion, retrieval, fusion, reranking) without labeled ground truth.
+influence final ranking behavior.
 
-**Observability implementation**:
+---
+
+# Engineering Contributions
+
+## 1. Instrumented Retrieval Pipeline
+
+Every retrieval stage emits structured logs and metrics.
+
+Tracked per request:
+- Query expansion variants
+- Vector similarity scores
+- BM25 scores
+- Fusion scores
+- Reranking deltas
+- Stage latency breakdown
+- Token usage
+
+Example instrumentation output:
+
 ```json
 {
   "chunks": [{
-    "vector_score": 0.87, "bm25_score": 12.3,
-    "fused_score": 0.82, "reranked_score": 0.91
+    "vector_score": 0.87,
+    "bm25_score": 12.3,
+    "fused_score": 0.82,
+    "reranked_score": 0.91
   }],
   "latency_breakdown": {
-    "expansion_ms": 280, "retrieval_ms": 150,
-    "reranking_ms": 1200, "generation_ms": 890
+    "expansion_ms": 280,
+    "retrieval_ms": 150,
+    "reranking_ms": 1200,
+    "generation_ms": 890
   }
 }
 ```
 
-**Logging strategy**: Synchronous SQLite writes (acceptable <100 QPS). Production alternative: async message queue (Redis/RabbitMQ) → log aggregation (Datadog/CloudWatch) with backpressure handling.
+This enables inspection of how each retrieval stage contributed to:
+- ranking behavior,
+- latency,
+- retrieval failures
 
-### 2. Hybrid Retrieval + Reranking Under Memory Constraints
+without requiring a fully labeled evaluation pipeline.
 
-**Problem**: Vector-only missed keyword queries ("Python developer with 5 years"). Cross-encoder reranking requires ~800MB RAM (exceeds 512MB free tier).
+### Logging Strategy
 
-**Solution**: Hybrid FAISS + BM25 (65/35 fusion) with automatic LLM reranking fallback.
+Current implementation:
+- synchronous SQLite logging
+- optimized for low-throughput workloads (<100 QPS)
 
-**Performance benchmarks** (50 queries, 10-doc corpus):
-- **Latency**: p50: 920ms, p95: 1850ms, p99: 2400ms
-- **Retrieval quality** (manual evaluation, 20 test queries): Precision@5: ~70%, Recall@10: ~85%, Top-1 accuracy: ~60%
+Production alternative:
+- async message queue (Redis / RabbitMQ)
+- centralized log aggregation
+- backpressure handling
+- distributed tracing
 
-**Baseline comparison**:
+---
 
-| Configuration | Keyword Success | Semantic Success | Avg Latency | Top-3 Precision |
-|---------------|----------------|------------------|-------------|-----------------|
+# 2. Hybrid Retrieval + Reranking
+
+## Problem
+
+Vector-only retrieval struggled with keyword-heavy queries such as:
+
+```text
+"Python developer with 5 years experience"
+```
+
+Cross-encoder reranking improved ranking quality but exceeded memory limits under the 512MB deployment constraint.
+
+---
+
+## Solution
+
+Implemented:
+- FAISS vector retrieval
+- BM25 lexical retrieval
+- weighted score fusion (65/35)
+- reranking fallback using LLM-based scoring
+
+---
+
+## Benchmark Results
+
+Evaluation performed on:
+- 50 test queries
+- 10-document corpus
+- manually labeled relevance set
+
+Latency:
+- p50 → 920ms
+- p95 → 1850ms
+- p99 → 2400ms
+
+Directional evaluation on a small labeled dataset suggested improved retrieval quality after hybrid retrieval and reranking.
+
+| Configuration | Keyword Queries | Semantic Queries | Avg Latency | Top-3 Precision |
+|---|---|---|---|---|
 | Vector-only | 3/10 | 8/10 | 600ms | 5/10 |
-| Hybrid (no rerank) | 9/10 | 7/10 | 650ms | 6/10 |
-| Hybrid + Rerank | 9/10 | 8/10 | 1200ms | 8/10 |
+| Hybrid Retrieval | 9/10 | 7/10 | 650ms | 6/10 |
+| Hybrid + Reranking | 9/10 | 8/10 | 1200ms | 8/10 |
 
-**Evaluation methodology**: 20 test queries manually labeled for relevance (binary: relevant/not relevant). Queries sampled from CV domain (technical skills, experience, education). Labeling: single annotator, no inter-rater reliability. Variance not measured (small sample size).
+### Key Observation
 
-**Key insight**: Hybrid retrieval improves recall but destabilizes ranking distribution, requiring reranking to restore consistent top-k ordering.
+Hybrid retrieval improved recall but destabilized ranking consistency, making reranking necessary for reliable top-k ordering.
 
-### 3. Query Expansion Layer
+---
 
-LLM generates alternative phrasings for ambiguous queries. Improves recall (4/10 → 7/10 on ambiguous queries) but adds ~300ms latency and reduces determinism.
+# 3. Query Expansion Layer
 
-## Tech Stack & Constraints
+LLM-generated query reformulation was used to improve retrieval recall for ambiguous or underspecified prompts.
 
-| Layer | Stack | Why |
-|-------|-------|-----|
-| Vector DB | FAISS | Local memory constraint (no vector DB overhead) |
-| LLM | Groq | Cost-free inference |
-| Database | SQLite | Single-user, non-concurrent workload |
-| Deployment | Render (512MB RAM) | Free tier constraint |
+Observed behavior:
+- improved ambiguous query retrieval
+- increased latency (~300ms)
+- reduced determinism
 
-**Constraint → Design Decision**:
+Tradeoff:
+higher recall at the cost of inference stability and response time.
 
-| Constraint | Choice | Tradeoff |
-|------------|--------|----------|
-| 512MB RAM | LLM reranking fallback | +1150ms latency, non-deterministic |
-| Free tier | FAISS local | Single-node, no distributed indexing |
-| No labeled data | LLM-as-judge eval | Directional debugging only |
+---
 
-**Scaling**: ~10-50 docs (demo scale), O(log n) FAISS, O(n) BM25 scan. **Breaks at**: 1k+ docs (BM25 scan degrades), 10k+ docs (FAISS rebuild blocks queries), concurrent writes (SQLite lock contention).
+# System Constraints and Design Decisions
 
-## Production Architecture Gaps
+| Constraint | Design Choice | Tradeoff |
+|---|---|---|
+| 512MB RAM | LLM reranking fallback | Higher latency |
+| Free-tier deployment | Local FAISS index | Single-node architecture |
+| No labeled dataset | Directional evaluation only | Limited statistical confidence |
+| SQLite logging | Simplicity and reliability | Write contention at scale |
 
-**Missing for production**:
-- **Caching**: Embedding cache (Redis), query cache (LRU)
-- **Resilience**: Retry logic for LLM failures, circuit breakers
-- **Backpressure**: Rate limiting, request queuing
-- **Partial failure recovery**: Fallback to vector-only if BM25 fails
-- **Index updates**: Incremental indexing (current: full rebuild on delete)
+---
 
-## Observed Failure Modes
+# Known Failure Modes
 
-| Failure | Cause | Severity | User Impact |
-|---------|-------|----------|-------------|
-| Negation queries | BM25 keyword dominance | High (frequent) | Returns wrong answer |
-| List fragmentation | Fixed-size chunking | High (frequent) | Incomplete context |
-| Multi-hop reasoning | No cross-document layer | Medium (rare, high impact) | Misses relationships |
-| Ranking instability | LLM reranker stochasticity | Medium | Inconsistent ranking |
+| Failure Mode | Cause | Impact |
+|---|---|---|
+| Negation queries | BM25 keyword dominance | Incorrect retrieval |
+| List fragmentation | Fixed-size chunking | Partial context loss |
+| Multi-hop reasoning | No cross-document reasoning layer | Missed relationships |
+| Ranking instability | Stochastic reranking | Non-deterministic ordering |
 
-**Failure reproduction** (negation query):
+---
 
-**Query**: "What is NOT covered by the warranty?"
+# Example Failure Analysis
 
-**Before (vector-only)**: Top chunks discuss coverage, not exclusions → wrong answer  
-**After (hybrid + rerank)**: Reranking promoted exclusion chunks → correct answer
+## Query
 
-**Pipeline trace**: Vector search failed (semantic similarity to "covered"), BM25 partial success, reranking fixed (LLM understood negation).
+```text
+"What is NOT covered by the warranty?"
+```
 
-## Why This Matters Beyond This Project
+## Observed Behavior
 
-**Real-world system analogy**:
-- Similar to **Slack's enterprise search debugging layer**: exposes why certain messages rank higher
-- Equivalent to **OpenAI's RAG evaluation stack**: per-stage instrumentation for retrieval quality analysis
-- Mirrors **Notion's internal wiki search**: hybrid retrieval with observability
+### Vector-only Retrieval
+Retrieved chunks discussing warranty coverage instead of exclusions.
 
-**Applicable to**: Enterprise search debugging (Slack, Notion, Confluence), production RAG systems at Perplexity/You.com, constrained deployment (edge devices, serverless).
+### Hybrid + Reranking
+BM25 partially surfaced exclusion-related chunks.
+Reranking corrected final ordering by prioritizing negation-aware results.
 
-## What I Would Do Next in Production
+### Pipeline Observation
 
-1. **Migrate to vector DB** (Pinecone/Qdrant): Distributed indexing, incremental updates, concurrent writes
-2. **Distributed reranking service**: Separate service with autoscaling, cross-encoder model serving
-3. **Evaluation harness**: Labeled dataset (100-200 queries), graded relevance judgments, statistical validation
-4. **A/B testing framework**: Configuration experimentation (fusion weights, reranker choice), online metrics
-5. **Async logging pipeline**: Message queue → log ingestion service → time-series DB (InfluxDB/Prometheus)
+- vector retrieval failed semantically
+- BM25 partially recovered lexical intent
+- reranking corrected final ranking
 
-## Quick Start
+---
+
+# Scaling Limitations
+
+Current architecture supports:
+- ~10–50 documents
+- single-user workloads
+- low-concurrency inference
+
+Known scaling bottlenecks:
+- BM25 linear scan degradation at larger corpus sizes
+- FAISS index rebuild cost
+- SQLite write contention
+- synchronous logging overhead
+
+---
+
+# Missing for Production
+
+The current system intentionally prioritizes observability and constrained deployment experimentation over production scalability.
+
+Missing components include:
+- embedding cache
+- query cache
+- retry logic
+- circuit breakers
+- request queueing
+- distributed indexing
+- incremental index updates
+- autoscaling reranking services
+
+---
+
+# Future Improvements
+
+Potential production upgrades:
+- Pinecone or Qdrant for distributed indexing
+- async observability pipeline
+- retrieval evaluation harness
+- A/B testing framework
+- Prometheus/Grafana metrics
+- distributed reranking service
+
+---
+
+# Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Vector Retrieval | FAISS |
+| Lexical Retrieval | BM25 |
+| LLM Inference | Groq |
+| Backend | FastAPI |
+| Database | SQLite |
+| Deployment | Render |
+
+---
+
+# API Endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `/documents/upload` | Upload and index documents |
+| `/query/stream` | Streaming RAG inference |
+| `/eval/retrieval` | Retrieval diagnostics |
+
+---
+
+# Quick Start
 
 ```bash
 # Backend
-cd backend && pip install -r requirements.txt
-cp .env.example .env  # add GROQ_API_KEY
-uvicorn app.main:app --reload
+cd backend
+pip install -r requirements.txt
 
-# Frontend
-cd frontend && npm install && npm run dev
+cp .env.example .env
+# Add GROQ_API_KEY
+
+uvicorn app.main:app --reload
 ```
 
-## API
+```bash
+# Frontend
+cd frontend
 
-| Endpoint | Purpose |
-|----------|---------|
-| `/documents/upload` | Upload + chunk + index |
-| `/query/stream` | Streaming RAG inference |
-| `/eval/retrieval` | Retrieval quality diagnostics |
+npm install
+npm run dev
+```
 
-## Summary
+---
 
-This is an **instrumented retrieval system** for debugging RAG failure modes, not a chatbot.
+# Summary
 
-**Key contribution**: Separating recall, precision, and observability as independent layers enables per-stage debugging without labeled ground truth—a pattern applicable to production retrieval systems.
+This project focuses on retrieval observability and ranking analysis rather than chatbot functionality.
 
-## License
+The core idea is that:
+- retrieval quality,
+- ranking behavior,
+- latency tradeoffs,
+- and failure modes
+
+should be inspectable and measurable at every stage of the pipeline.
+
+---
+
+# License
 
 MIT
+````
+
