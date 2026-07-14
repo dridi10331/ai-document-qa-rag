@@ -42,6 +42,7 @@ def retrieve_chunks(
     document_ids: list[str] | None,
     use_hybrid: bool | None,
     enable_query_expansion: bool | None,
+    reranker_override: str | None = None,
 ) -> RetrievalResult:
     """
     Hybrid retrieval pipeline:
@@ -131,7 +132,7 @@ def retrieve_chunks(
         chunks=ranked_chunks,
         settings=settings,
         top_k=top_k,
-        reranker=settings.reranker_type,
+        reranker=reranker_override if reranker_override is not None else settings.reranker_type,
     )
 
     expanded_query_text = " | ".join(expanded_queries) if expanded_queries else None

@@ -397,14 +397,11 @@ async def compare_retrieval_configs(
             document_ids=None,
             use_hybrid=False,
             enable_query_expansion=False,
+            reranker_override="none",
         )
         return [{"chunk_id": c.chunk_id} for c in result.chunks]
     
     def hybrid_no_rerank(query: str, top_k: int = 10):
-        # Temporarily disable reranking
-        original_reranker = settings.reranker_type
-        settings.reranker_type = "none"
-        
         result = retrieve_chunks(
             session=session,
             query=query,
@@ -413,9 +410,8 @@ async def compare_retrieval_configs(
             document_ids=None,
             use_hybrid=True,
             enable_query_expansion=False,
+            reranker_override="none",
         )
-        
-        settings.reranker_type = original_reranker
         return [{"chunk_id": c.chunk_id} for c in result.chunks]
     
     def hybrid_with_rerank(query: str, top_k: int = 10):
