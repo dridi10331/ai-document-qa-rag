@@ -90,7 +90,7 @@ def _generate_answer_groq(
     client = get_groq_client(settings)
     if client is None:
         return AnswerResult(
-            answer="GROQ_API_KEY is missing. Get a free key at https://console.groq.com",
+            answer="LLM service is not configured. Please contact the administrator.",
             model=None,
             usage=None,
         )
@@ -112,9 +112,9 @@ def _generate_answer_groq(
             usage=AnswerUsage(tokens_in=tokens_in, tokens_out=tokens_out, cost_estimate=0.0),
         )
     except Exception as e:
-        logger.error(f"Groq error: {e}")
+        logger.error(f"Groq error: {e}", exc_info=True)
         return AnswerResult(
-            answer=f"Groq error: {str(e)}",
+            answer="An error occurred while generating the answer. Please try again.",
             model=None,
             usage=None,
         )
@@ -156,9 +156,9 @@ def _generate_answer_ollama(
             usage=AnswerUsage(tokens_in=tokens_in, tokens_out=tokens_out, cost_estimate=0.0),
         )
     except Exception as e:
-        logger.error(f"Ollama error: {e}")
+        logger.error(f"Ollama error: {e}", exc_info=True)
         return AnswerResult(
-            answer=f"Ollama error: {str(e)}. Make sure Ollama is running.",
+            answer="An error occurred while generating the answer. Please try again.",
             model=None,
             usage=None,
         )
@@ -190,7 +190,7 @@ def _stream_answer_groq(
 ) -> Iterator[str]:
     client = get_groq_client(settings)
     if client is None:
-        yield "GROQ_API_KEY is missing. Get a free key at https://console.groq.com"
+        yield "LLM service is not configured. Please contact the administrator."
         return
 
     messages = build_messages(query, context_chunks, chat_history, settings)
@@ -207,8 +207,8 @@ def _stream_answer_groq(
             if delta and delta.content:
                 yield delta.content
     except Exception as e:
-        logger.error(f"Groq streaming error: {e}")
-        yield f"Groq error: {str(e)}"
+        logger.error(f"Groq streaming error: {e}", exc_info=True)
+        yield "An error occurred while streaming the answer. Please try again."
 
 
 def _stream_answer_ollama(
@@ -244,8 +244,8 @@ def _stream_answer_ollama(
                 if "message" in chunk and "content" in chunk["message"]:
                     yield chunk["message"]["content"]
     except Exception as e:
-        logger.error(f"Ollama streaming error: {e}")
-        yield f"Ollama error: {str(e)}"
+        logger.error(f"Ollama streaming error: {e}", exc_info=True)
+        yield "An error occurred while streaming the answer. Please try again."
 
 
 def estimate_prompt_tokens(query: str, context_chunks: list[dict], settings: Settings) -> int:
