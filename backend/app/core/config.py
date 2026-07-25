@@ -46,12 +46,20 @@ class Settings(BaseSettings):
     enable_analytics: bool = True
     cost_input_per_1k: float = 0.005
     cost_output_per_1k: float = 0.015
+    api_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @field_validator("groq_api_key", mode="before")
     @classmethod
     def empty_api_key_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def empty_auth_key_to_none(cls, value):
         if isinstance(value, str) and not value.strip():
             return None
         return value
