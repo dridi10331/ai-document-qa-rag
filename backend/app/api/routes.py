@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 from time import perf_counter
 
@@ -7,6 +8,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, WebSock
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 from starlette.concurrency import run_in_threadpool
+
+from app.core.auth import verify_api_key
 
 from app.core.config import get_settings
 from app.db.crud import (
@@ -74,6 +77,7 @@ def health() -> HealthStatus:
 async def upload_documents(
     files: list[UploadFile] = File(...),
     session: Session = Depends(get_session),
+    _auth: None = Depends(verify_api_key),
 ) -> list[DocumentIngestResponse]:
     settings = get_settings()
     responses: list[DocumentIngestResponse] = []
@@ -139,6 +143,7 @@ def get_document_status(
 async def delete_document_by_id(
     document_id: str,
     session: Session = Depends(get_session),
+    _auth: None = Depends(verify_api_key),
 ) -> DocumentDeleteResponse:
     document = get_document(session, document_id)
     if not document:
@@ -154,6 +159,7 @@ async def delete_document_by_id(
 def query_documents(
     payload: QueryRequest,
     session: Session = Depends(get_session),
+    _auth: None = Depends(verify_api_key),
 ) -> QueryResponse:
     settings = get_settings()
     start = perf_counter()
@@ -239,6 +245,7 @@ def stream_query(
     use_hybrid: bool | None = None,
     enable_query_expansion: bool | None = None,
     session: Session = Depends(get_session),
+    _auth: None = Depends(verify_api_key),
 ) -> StreamingResponse:
     settings = get_settings()
     if not query.strip():
@@ -329,6 +336,12 @@ def stream_query(
 @router.websocket("/ws/documents/{document_id}")
 async def document_status_ws(websocket: WebSocket, document_id: str) -> None:
     await websocket.accept()
+    settings = get_settings()
+    if settings.api_key is not None:
+        token = websocket.query_params.get("api_key")
+        if not token or not hmac.compare_digest(token, settings.api_key):
+            await websocket.close(code=4003, reason="Invalid or missing API key")
+            return
     try:
         async for event in status_hub.subscribe(document_id):
             await websocket.send_json(event.model_dump())
@@ -340,6 +353,7 @@ async def document_status_ws(websocket: WebSocket, document_id: str) -> None:
 def create_chat_session(
     payload: ChatSessionCreate,
     session: Session = Depends(get_session),
+    _auth: None = Depends(verify_api_key),
 ) -> ChatSessionOut:
     chat_session = create_session(session, payload.title)
     return ChatSessionOut.model_validate(chat_session)
@@ -366,7 +380,10 @@ def analytics_summary(session: Session = Depends(get_session)) -> AnalyticsSumma
 
 
 @router.post("/indexes/rebuild")
-async def rebuild_all_indexes(session: Session = Depends(get_session)) -> dict:
+async def rebuild_all_indexes(
+    session: Session = Depends(get_session),
+    _auth: None = Depends(verify_api_key),
+) -> dict:
     settings = get_settings()
     await run_in_threadpool(rebuild_indexes, session, settings)
     return {"status": "rebuild_started"}
@@ -375,6 +392,7 @@ async def rebuild_all_indexes(session: Session = Depends(get_session)) -> dict:
 @router.post("/eval/compare_configs")
 async def compare_retrieval_configs(
     session: Session = Depends(get_session),
+    _auth: None = Depends(verify_api_key),
 ) -> dict:
     """
     Compare retrieval configurations using labeled evaluation dataset.
@@ -442,6 +460,7 @@ async def compare_retrieval_configs(
 def evaluate_retrieval(
     payload: QueryRequest,
     session: Session = Depends(get_session),
+    _auth: None = Depends(verify_api_key),
 ) -> dict:
     """
     Retrieval evaluation endpoint.
@@ -542,6 +561,7 @@ def evaluate_retrieval(
 async def get_retrieval_dashboard(
     payload: QueryRequest,
     session: Session = Depends(get_session),
+    _auth: None = Depends(verify_api_key),
 ) -> dict:
     """
     Retrieval dashboard endpoint - returns detailed visualization data.
