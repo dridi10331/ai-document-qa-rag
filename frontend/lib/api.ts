@@ -1,6 +1,16 @@
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  if (API_KEY) {
+    headers["X-Api-Key"] = API_KEY;
+  }
+  return headers;
+}
+
 export type DocumentOut = {
   id: string;
   filename: string;
@@ -37,6 +47,7 @@ export async function uploadDocuments(files: File[]): Promise<UploadResponse[]> 
 
   const response = await fetch(`${API_BASE}/documents/upload`, {
     method: "POST",
+    headers: authHeaders(),
     body: formData
   });
 
@@ -94,7 +105,7 @@ export type ChatMessage = {
 export async function askQuestion(query: string): Promise<QueryResponse> {
   const response = await fetch(`${API_BASE}/query`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ query })
   });
 
@@ -126,7 +137,7 @@ export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
 export async function createChatSession(title?: string): Promise<ChatSession> {
   const response = await fetch(`${API_BASE}/sessions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ title })
   });
   if (!response.ok) {
@@ -172,6 +183,7 @@ export function askQuestionStream(
   if (options.document_ids && options.document_ids.length > 0) {
     params.set("document_ids", options.document_ids.join(","));
   }
+  if (API_KEY) params.set("api_key", API_KEY);
 
   const source = new EventSource(`${API_BASE}/query/stream?${params.toString()}`);
 
@@ -195,8 +207,11 @@ export function askQuestionStream(
 }
 
 export function getWebsocketBase(): string {
+  let base: string;
   if (API_BASE.startsWith("https")) {
-    return API_BASE.replace("https", "wss");
+    base = API_BASE.replace("https", "wss");
+  } else {
+    base = API_BASE.replace("http", "ws");
   }
-  return API_BASE.replace("http", "ws");
+  return API_KEY ? `${base}?api_key=${encodeURIComponent(API_KEY)}` : base;
 }
