@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
@@ -7,14 +7,18 @@ from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 class Document(SQLModel, table=True):
     id: Optional[str] = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     filename: str
     content_type: Optional[str] = None
     size_bytes: int = 0
     status: str = "uploaded"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
     page_count: int = 0
     chunk_count: int = 0
     status_detail: Optional[str] = None
@@ -32,7 +36,7 @@ class Chunk(SQLModel, table=True):
 class ChatSession(SQLModel, table=True):
     id: Optional[str] = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     title: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class ChatMessage(SQLModel, table=True):
@@ -40,7 +44,7 @@ class ChatMessage(SQLModel, table=True):
     session_id: str = Field(foreign_key="chatsession.id", index=True)
     role: str
     content: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class QueryLog(SQLModel, table=True):
@@ -48,7 +52,7 @@ class QueryLog(SQLModel, table=True):
     session_id: Optional[str] = Field(default=None, index=True)
     query: str
     expanded_query: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
     top_k: int = 5
     document_ids: Optional[str] = None
     latency_ms: Optional[float] = None
