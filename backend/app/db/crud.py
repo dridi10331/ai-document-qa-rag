@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlmodel import Session, col, select
 
 from app.db.models import (
@@ -19,7 +19,7 @@ def create_document(session: Session, document: Document) -> Document:
 
 
 def update_document(session: Session, document: Document, **kwargs) -> Document:
-    kwargs.setdefault("updated_at", datetime.utcnow())
+    kwargs.setdefault("updated_at", datetime.now(timezone.utc))
     for key, value in kwargs.items():
         setattr(document, key, value)
     session.add(document)

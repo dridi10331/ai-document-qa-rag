@@ -343,8 +343,8 @@ def run_benchmark(
     
     avg_latency = sum(r.latency_ms for r in results) / len(results)
     
-    from datetime import datetime
-    timestamp = datetime.utcnow().isoformat()
+    from datetime import datetime, timezone
+    timestamp = datetime.now(timezone.utc).isoformat()
     
     return BenchmarkReport(
         strategy_name=strategy,
